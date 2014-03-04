@@ -12,6 +12,7 @@ module Api
 
 import           Control.Applicative
 import           Control.Monad              (liftM)
+import           Control.Monad.Reader
 import           Data.Aeson
 import qualified Data.ByteString.Lazy       as L
 import qualified Data.ByteString.Lazy.Char8 as LC
@@ -32,39 +33,28 @@ import           Text.Printf                (printf)
 import           Token
 import           Util
 
-import Control.Monad.Reader
-
-pcsUrl, cPcsUrl, dPcsUrl :: String
-pcsUrl = "https://pcs.baidu.com/rest/2.0/pcs/"
-cPcsUrl = "https://c.pcs.baidu.com/rest/2.0/pcs/"
-dPcsUrl = "https://d.pcs.baidu.com/rest/2.0/pcs/"
-
-main :: IO ()
-main = putStrLn "Welcome to Command Line PCS"
 
 
 type Resp a = Either a Err
 type RawResponse = Response L.ByteString
 
-extractAppPath (Vars AppConfig {appPath, ..} _) = appPath
-extractAccToken (Vars _ (Just (TokenResp {accessToken, ..}))) = accessToken
-accessTokenParam = (,) "access_token" . extractAccToken
+
 
 -- | 查询配额和使用情况
-quotaInfo = 
+quotaInfo =
         currentTokenConfig >>= runReaderT quotaInfoT >>= liftIO . handleResult
-    where 
+    where
         quotaInfoT :: ReaderT Vars IO (Resp Quota)
         quotaInfoT = do
             vs <- ask
-            let params = Map.fromList [("method", "info"), accessTokenParam vs]
+            let params = mkParams vs
             liftIO $ sendRequest baseUrl params GET
 
         baseUrl = pcsUrl ++ "quota"
         mkParams v = Map.fromList [("method", "info"), accessTokenParam v]
 
 
-search path wd recur = 
+search path wd recur =
         currentTokenConfig >>= runReaderT searchT >>= liftIO . handleResult
     where
         searchT :: ReaderT Vars IO (Resp SearchResult)
@@ -79,8 +69,8 @@ search path wd recur =
         url = pcsUrl ++ "file"
 
 
--- | 
-upload path file ovr = 
+-- |
+upload path file ovr =
         currentTokenConfig >>= runReaderT uploadT >>= liftIO . handleResult
     where
         uploadT :: ReaderT Vars IO (Resp (Maybe Value))
@@ -93,10 +83,10 @@ upload path file ovr =
 
 
         mkUrl :: Vars -> String
-        mkUrl v = printf "%s?%s" baseUrl (joinParams $ mkParams v) 
+        mkUrl v = buildUrl baseUrl (mkParams v)
 
-        baseUrl :: String   
-        baseUrl = cPcsUrl ++ "/file"
+        baseUrl :: String
+        baseUrl = cPcsUrl ++ "file"
         mkParams v = Map.fromList [accessTokenParam v,
                         ("ondup", if ovr then "overwrite" else "newcopy"),
                         ("path", prependAppPath path v),
@@ -105,7 +95,7 @@ upload path file ovr =
 
 -- |
 download :: String -> String -> IO ()
-download path targetPath = 
+download path targetPath =
         currentTokenConfig >>= runReaderT downloadT >>= liftIO . handleResult
     where
         downloadT :: ReaderT Vars IO (Resp DownloadResult)
@@ -126,12 +116,12 @@ download path targetPath =
             (error $ "parse JSON result error: " ++ LC.unpack body)
             (decode body)
 
-        mkUrl v = printf "%s?%s" baseUrl (joinParams $ params v)
+        mkUrl v = buildUrl baseUrl (mkParams v)
 
         baseUrl :: String
-        baseUrl = dPcsUrl ++ "/file"
-        params v = Map.fromList [accessTokenParam v,
-                    ("method", "download"), 
+        baseUrl = dPcsUrl ++ "file"
+        mkParams v = Map.fromList [accessTokenParam v,
+                    ("method", "download"),
                     ("path", prependAppPath path v)]
 
 
@@ -139,11 +129,17 @@ download path targetPath =
 prependAppPath :: String -> Vars -> String
 prependAppPath p v = normalise . (++ p) . appPath . appConfig $ v
 
-pathReader :: String -> Reader Vars String
-pathReader p = do 
-    v <- ask
-    return (prependAppPath p v)
 
+pcsUrl, cPcsUrl, dPcsUrl :: String
+pcsUrl = "https://pcs.baidu.com/rest/2.0/pcs/"
+cPcsUrl = "https://c.pcs.baidu.com/rest/2.0/pcs/"
+dPcsUrl = "https://d.pcs.baidu.com/rest/2.0/pcs/"
+
+extractAppPath (Vars AppConfig {appPath, ..} _) = appPath
+
+extractAccToken (Vars _ (Just (TokenResp {accessToken, ..}))) = accessToken
+
+accessTokenParam = (,) "access_token" . extractAccToken
 
 
 handleResult :: Show a => Resp a -> IO ()
@@ -212,6 +208,7 @@ data Err = Err {
         eReqId :: Integer
     } deriving (Show)
 
+
 instance FromJSON Err where
     parseJSON (Object v) = Err <$>
                 v .: "error_code" <*>
@@ -226,8 +223,9 @@ instance Show Quota where
             printf "当前配额: %.2f G, 已经使用: %.2f G" total used'
         where
             total, used' :: Double
-            total = fromIntegral quota / 1024 / 1024 / 1024
-            used' = fromIntegral used / 1024 / 1024 / 1024
+            total = fromIntegral quota / toG
+            used' = fromIntegral used / toG
+            toG =  1024 * 1024 * 1024
 
 
 instance FromJSON Quota where

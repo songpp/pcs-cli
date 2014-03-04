@@ -37,8 +37,6 @@ import           System.Environment         (getArgs)
 import           System.FilePath
 import           System.IO
 import           Text.Printf                (printf)
-
-import           Data.IVar.Simple           as V
 import           Util
 
 --

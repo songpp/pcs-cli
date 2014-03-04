@@ -31,15 +31,15 @@ cPcsUrl = "https://c.pcs.baidu.com/rest/2.0/pcs/"
 dPcsUrl = "https://d.pcs.baidu.com/rest/2.0/pcs/"
 
 
-data Args = Info 
+data Args = Info
           | Auth { appKey :: FilePath }
           | Quota
-          | Search { basePath :: FilePath 
-                   , keywrod :: String
-                   , recursive :: Bool 
+          | Search { basePath  :: FilePath
+                   , keywrod   :: String
+                   , recursive :: Bool
                    }
-          | Upload { file :: FilePath
-                   , targetPath :: FilePath 
+          | Upload { file       :: FilePath
+                   , targetPath :: FilePath
                    }
           | Download { path :: FilePath }
     deriving (Eq, Show, Typeable, Data)

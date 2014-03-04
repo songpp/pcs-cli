@@ -62,15 +62,15 @@ sendRequest :: (FromJSON a, FromJSON b) =>
                 -> IO (Either a b)
 sendRequest url params m = do
         resp' <- doRequest url params m
-        printf " << response: %s ... \n" 
+        printf " << response: %s ... \n"
             (P.take 200 . LC.unpack $ responseBody resp')
         let resp = handleJSONResponse resp'
         return resp
 
 
-doRequest :: String 
-          -> Map String String 
-          -> StdMethod 
+doRequest :: String
+          -> Map String String
+          -> StdMethod
           -> IO (Response L.ByteString)
 doRequest url param m = withSocketsDo $ do
         printf ">> %s: [ %s ] \n" (show m) url
@@ -105,8 +105,8 @@ doRequest url param m = withSocketsDo $ do
 
 
 
-handleJSONResponse :: (FromJSON a, FromJSON b) => 
-                      Response L.ByteString 
+handleJSONResponse :: (FromJSON a, FromJSON b) =>
+                      Response L.ByteString
                    -> Either a b
 handleJSONResponse resp = if responseSuccess resp
         then Left $ decodeRespBody body
