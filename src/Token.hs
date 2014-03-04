@@ -73,7 +73,7 @@ currentTokenConfig = do
 askNewAccessToken :: IO Vars
 askNewAccessToken = do
     conf <- loadAppConfig
-    dcResp <- deviceAuth conf
+    dcResp <- deviceCodeAuth conf
     tok <- requestForAccessToken conf dcResp
     return Vars { appConfig = conf, token = Just tok }
     
@@ -106,8 +106,6 @@ requestForAccessToken (AppConfig {appKey, secret, ..}) dc = do
                 ("code", deviceCode dc),
                 ("client_id", appKey),
                 ("client_secret", secret)]
-
-deviceAuth = deviceCodeAuth
 
 
 deviceCodeAuth AppConfig {appKey, ..} = do
