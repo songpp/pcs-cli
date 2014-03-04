@@ -52,7 +52,7 @@ executable pcs-console
 
   hs-source-dirs:      src
 
-  --ghc-options:         -dynamic
+  -- ghc-options:         -dynamic
   
   -- Modules included in this executable, other than Main.
   -- other-modules:       
@@ -79,9 +79,7 @@ executable pcs-console
                     ,  text
                     ,  utf8-string >= 0.3.7
                     ,  cmdargs >= 0.10.7
-  
-  -- Directories containing source files.
-  -- hs-source-dirs:      
+
   
   -- Base language which the package is written in.
   default-language:    Haskell2010
