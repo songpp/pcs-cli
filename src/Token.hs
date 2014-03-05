@@ -25,8 +25,10 @@ import           Data.Attoparsec
 import           Data.Attoparsec.Number
 import           Data.ByteString            (ByteString)
 import qualified Data.ByteString.Lazy       as L
+import qualified Data.ByteString.Lazy.UTF8  as U
 import qualified Data.ByteString.Lazy.Char8 as LC
 import qualified Data.Map                   as Map
+
 import           Network                    (withSocketsDo)
 import           Network.HTTP.Conduit
 import           Network.HTTP.Types.Method  (Method, StdMethod (GET, POST),
@@ -138,8 +140,8 @@ loadAppConfig = do
         f <- appConfigFile
         e <- doesFileExist f
         cont <- if not e 
-            then error ("需要文件: " ++ f ++ 
-                "\n JSON格式：{ \n\t appKey : \"...\", \n\t secretKey: \"...\", \n\t appPath: \"/apps/...\" }") 
+            then error ("需要App配置文件: " ++ f ++ "\n格式: " ++
+                    (U.toString . encode $ AppConfig "your app key" "your app secret" "your app path"))
             else L.readFile f 
         case eitherDecode cont of
             Left err -> error $ "读取App配置出错：" ++ err
@@ -153,8 +155,8 @@ data Err = Err {
     } deriving Show
 
 instance FromJSON Err where
-    parseJSON (Object v) = Err 
-                <$> v .: "error"
+    parseJSON (Object v) = 
+            Err <$> v .: "error"
                 <*> v .: "error_description"
 
 data DeviceCodeResp = DeviceCodeResp {
@@ -168,13 +170,13 @@ data DeviceCodeResp = DeviceCodeResp {
 
 
 instance FromJSON DeviceCodeResp where
-    parseJSON (Object v) = DeviceCodeResp 
-                <$> v .: "device_code"
-                <*> v .: "user_code" 
-                <*> v .: "verification_url" 
-                <*> v .: "qrcode_url" 
-                <*> v .: "expires_in" 
-                <*> v .: "interval"
+    parseJSON (Object v) = 
+        DeviceCodeResp <$> v .: "device_code"
+                       <*> v .: "user_code" 
+                       <*> v .: "verification_url" 
+                       <*> v .: "qrcode_url" 
+                       <*> v .: "expires_in" 
+                       <*> v .: "interval"
 
 
 data TokenResp = TokenResp {
@@ -187,13 +189,13 @@ data TokenResp = TokenResp {
     } deriving (Show, Eq)
 
 instance FromJSON TokenResp where
-    parseJSON (Object v) = TokenResp <$>
-            v .: "access_token" <*>
-            v .: "expires_in" <*>
-            v .: "refresh_token" <*>
-            v .: "scope" <*>
-            v .: "session_key" <*>
-            v .: "session_secret"
+    parseJSON (Object v) = 
+        TokenResp <$> v .: "access_token" 
+                  <*> v .: "expires_in" 
+                  <*> v .: "refresh_token" 
+                  <*> v .: "scope" 
+                  <*> v .: "session_key" 
+                  <*> v .: "session_secret"
 
 
 data AppConfig = AppConfig { 
@@ -210,14 +212,16 @@ instance FromJSON AppConfig where
                   <*> v .: "appPath"
 
 
+instance ToJSON AppConfig where
+    toJSON AppConfig {appKey, secret, appPath} = 
+        object [ "appKey"    .= appKey
+               , "secretKey" .= secret
+               , "appPath"   .= appPath 
+               ]
+
+
 data Vars = Vars {
     appConfig :: AppConfig,
     token :: Maybe TokenResp
 } deriving Show 
-
-
-
-
-
-
 

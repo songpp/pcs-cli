@@ -127,7 +127,7 @@ download path targetPath =
 
 
 prependAppPath :: String -> Vars -> String
-prependAppPath p v = normalise . (++ p) . appPath . appConfig $ v
+prependAppPath p = normalise . (++ p) . appPath . appConfig
 
 
 pcsUrl, cPcsUrl, dPcsUrl :: String
