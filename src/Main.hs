@@ -105,7 +105,7 @@ handleUpload Upload{..} = do
     local <- absFilePath file
     ex <- doesFileExist local
     if not ex
-      then printf "本地文件%s不存在！"
+      then error "本地文件%s不存在！"
       else Api.upload (rp file local) local overwrite
   where
     rp remotePath localFile =
