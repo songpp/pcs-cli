@@ -30,6 +30,9 @@ import           Network.HTTP.Types.Method             (Method,
                                                         methodGet, methodPost)
 import           Network.HTTP.Types.Status
 import           Prelude                               as P
+import           System.Directory
+import           System.Environment
+import           System.FilePath
 import           Text.Printf                           (printf)
 
 
@@ -40,7 +43,7 @@ type Params = Map String String
 
 uploadFile :: String -> Params -> String -> IO (Response L.ByteString)
 uploadFile url params f = withSocketsDo $ do
-        printf "uploading file %s" f
+        --printf "uploading file %s" f
         req <- parseUrl url
         let req' = req { method = methodPost }
         request <- formDataBody body req'
@@ -62,8 +65,10 @@ sendRequest :: (FromJSON a, FromJSON b) =>
                 -> IO (Either a b)
 sendRequest url params m = do
         resp' <- doRequest url params m
-        printf " << response: %s ... \n"
-            (P.take 200 . LC.unpack $ responseBody resp')
+        debug <- isDebug
+        when debug $
+            printf " << response: %s ... \n"
+                (LC.unpack $ responseBody resp')
         let resp = handleJSONResponse resp'
         return resp
 
@@ -73,8 +78,10 @@ doRequest :: String
           -> StdMethod
           -> IO (Response L.ByteString)
 doRequest url param m = withSocketsDo $ do
-        printf ">> %s: [ %s ] \n" (show m) url
-        printf ">>>> param: [ %s ] \n" (joinParams param)
+        debug <- isDebug
+        when debug $ do
+                printf ">> %s: [ %s ] \n" (show m) url
+                printf ">>>> param: [ %s ] \n" (joinParams param)
         req <- case m of
             GET -> do
                 let url' = appendParamToUrl
@@ -109,8 +116,8 @@ handleJSONResponse :: (FromJSON a, FromJSON b) =>
                       Response L.ByteString
                    -> Either a b
 handleJSONResponse resp = if responseSuccess resp
-        then Left $ decodeRespBody body
-        else Right $ decodeRespBody body
+        then Right $ decodeRespBody body
+        else Left $ decodeRespBody body
     where
         body = responseBody resp
 
@@ -140,3 +147,23 @@ buildUrl url params = printf "%s?%s" url (joinParams params)
 joinParams :: Map String String -> String
 joinParams = drop 1 . Map.foldlWithKey (\acc k v ->
     printf "%s&%s=%s" acc (urlEncode k) (urlEncode v)) ""
+
+
+absFilePath :: String -> IO String
+absFilePath path = do
+        home <- getHomeDirectory
+        current <- getCurrentDirectory
+        return $ makeAbsFilePath home current path
+    where
+        makeAbsFilePath home current path = case normalise path of
+            ('~' : '/' : ps) -> joinPath [home, ps]
+            (l : ps) -> if l /= '/'
+                then joinPath [current, path]
+                else path
+
+
+isDebug = liftM e2bool (lookupEnv "DEBUG")
+    where
+        e2bool (Just "1") = True
+        e2bool _          = False
+

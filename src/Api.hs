@@ -34,8 +34,7 @@ import           Token
 import           Util
 
 
-
-type Resp a = Either a Err
+type Resp a = Either Err a
 type RawResponse = Response L.ByteString
 
 
@@ -71,9 +70,9 @@ search path wd recur =
 
 -- |
 upload path file ovr =
-        currentTokenConfig >>= runReaderT uploadT >>= liftIO . handleResult
+        currentTokenConfig >>= runReaderT uploadT >>= liftIO . handleDownloadResult
     where
-        uploadT :: ReaderT Vars IO (Resp (Maybe Value))
+        uploadT :: ReaderT Vars IO (Resp SearchResultItem)
         uploadT = do
             vs <- ask
             let url = mkUrl vs
@@ -92,24 +91,28 @@ upload path file ovr =
                         ("path", prependAppPath path v),
                         ("method", "upload") ]
 
+        handleDownloadResult (Right SearchResultItem{..}) =
+            printf "文件[ %s ]上传成功 PATH: %s\n"  file path
+        handleDownloadResult err = handleResult err
+
 
 -- |
 download :: String -> String -> IO ()
 download path targetPath =
-        currentTokenConfig >>= runReaderT downloadT >>= liftIO . handleResult
+        currentTokenConfig >>= runReaderT downloadT >>= liftIO . handleDownloadResult
     where
         downloadT :: ReaderT Vars IO (Resp DownloadResult)
         downloadT = do
             vs <- ask
             liftIO $ doRequest (mkUrl vs) Map.empty GET >>= \r ->
                         if responseSuccess r
-                        then liftM Left (handleResponse r)
-                        else return $ Right (parseResponseJSON $ responseBody r)
+                        then liftM Right (handleResponse r)
+                        else return $ Left (parseResponseJSON $ responseBody r)
 
         handleResponse :: RawResponse -> IO DownloadResult
         handleResponse response =
             L.writeFile targetPath (responseBody response) >>
-            return (DownloadResult targetPath)
+            return (DownloadResult path targetPath)
 
 
         parseResponseJSON body = fromMaybe
@@ -123,6 +126,10 @@ download path targetPath =
         mkParams v = Map.fromList [accessTokenParam v,
                     ("method", "download"),
                     ("path", prependAppPath path v)]
+
+        handleDownloadResult (Right DownloadResult{..}) =
+            printf "文件[ %s ]下载成功： %s\n" path target
+        handleDownloadResult err = handleResult err
 
 
 
@@ -143,14 +150,15 @@ accessTokenParam = (,) "access_token" . extractAccToken
 
 
 handleResult :: Show a => Resp a -> IO ()
-handleResult (Left q) = print q
-handleResult (Right e) = handleErr e
+handleResult (Right q) = print q
+handleResult (Left e) = handleErr e
 
 
 handleErr (Err c m r) = error $ printf "请求出错了：[ %d ] => [ %s ]\n" c m
 
 
 data DownloadResult = DownloadResult {
+        path   :: FilePath,
         target :: FilePath
     } deriving Show
 
@@ -196,7 +204,7 @@ instance FromJSON SearchResultItem where
           <*> v .: "mtime"
           <*> v .: "md5"
           <*> v .: "size"
-          <*> liftM int2bool (v .: "isdir")
+          <*> liftM int2bool (v .:? "isdir" .!= 1)
         where
             int2bool :: Int -> Bool
             int2bool = (> 0)

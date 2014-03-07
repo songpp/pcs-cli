@@ -1,20 +1,16 @@
 
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE LambdaCase         #-}
-{-# LANGUAGE NamedFieldPuns     #-}
-{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RecordWildCards    #-}
 {-# LANGUAGE UnicodeSyntax      #-}
 
-module Main
-        ( main
-        , quotaInfo
-        ) where
+module Main where
 
+import           Api
 import           Control.Applicative
-import           Control.Monad          (liftM)
+import           Control.Monad          (liftM, void)
 import           Data.Aeson
-import           Data.Map               ()
-import qualified Data.Map               as Map
+import           Data.List              (isSuffixOf)
 import           System.Console.CmdArgs
 import           System.Directory
 import           System.Environment
@@ -23,8 +19,6 @@ import           Text.Printf            (printf)
 import           Token
 import           Util
 
-import           Api
-
 pcsUrl, cPcsUrl, dPcsUrl :: String
 pcsUrl = "https://pcs.baidu.com/rest/2.0/pcs/"
 cPcsUrl = "https://c.pcs.baidu.com/rest/2.0/pcs/"
@@ -32,41 +26,92 @@ dPcsUrl = "https://d.pcs.baidu.com/rest/2.0/pcs/"
 
 
 data Args = Info
-          | Auth { appKey :: FilePath }
+          | Auth
           | Quota
-          | Search { basePath  :: FilePath
-                   , keywrod   :: String
+          | Search { basePath  :: String
+                   , keyword   :: String
                    , recursive :: Bool
                    }
-          | Upload { file       :: FilePath
-                   , targetPath :: FilePath
+          | Upload { file      :: FilePath
+                   , path      :: FilePath
+                   , overwrite :: Bool
                    }
-          | Download { path :: FilePath }
-    deriving (Eq, Show, Typeable, Data)
+          | Download { file      :: FilePath
+                     , path      :: FilePath
+                     , overwrite :: Bool
+                     }
+    deriving (Show, Data, Typeable)
 
+info = Info &= name "info"
+auth = Auth &= name "auth" &= help "申请Token，采用DeviceCode方式。"
+quota = Quota &= name "quota" &= help "查询空间使用情况"
+search = Search { basePath  = def &= opt "/" &= typ "PATH"
+                                  &= help "在这个路径下搜索，默认 / (APP的根目录)",
+                  keyword   = def &= help "关键字" ,
+                  recursive = def &= help "是否递归搜索子文件夹"
+              } &= name "search"  &= help "搜索文件"
 
-auth = Auth def
-quota = Quota &= help "查询空间使用情况"
+download = Download { file = def &= name "file" &= typ "FILE"
+                                 &= help "要下载的远程云盘文件路径，不需要附带APP路径"
+                    , path = def &= typ "FILE" &= help "要下载本地磁盘路径"
+                    , overwrite = def
+                               &= help "如果本地文件已经存在是否覆盖，默认不覆盖"
+                    } &= name "download" &= help "下载文件到指定目录"
 
-
+upload = Upload { file = def &= typ "FILE" &= help "要上传的文件"
+                , path = def &= typ "PATH"
+                             &= help "上传到云盘的路径，不需要带应用的路径前缀"
+                , overwrite   = def
+                             &= help "是否覆盖云盘上已经存在的文件"
+                } &= name "upload" &= help "上传文件"
 
 main :: IO ()
 main = do
-    cmd <- cmdArgs (modes  [auth, quota])
+    cmd <- cmdArgs $ modes  [ auth, quota
+                            , Main.search, Main.download
+                            , Main.upload ] &= program "pcs-console"
     case cmd of
+        --Info  -> currentTokenConfig >>= handleInfo
         Quota -> quotaInfo
-        otherwise -> return ()
-    args <- getArgs
-    print args
-    home <- getHomeDirectory
-    current <- getCurrentDirectory
-    let path = makeAbsFilePath home current (head args)
-    putStrLn "Welcome to Command Line PCS"
-    putStrLn $ "get path: " ++ path
+        Auth  -> void askNewAccessToken
+        Search{..} -> Api.search basePath keyword recursive
+        d @ Download{} -> handleDownload d
+        u @ Upload {} -> handleUpload u
 
 
-makeAbsFilePath home current path = case normalise path of
-    ('~' : '/' : ps) -> joinPath [home, ps]
-    (l : ps) -> if l /= '/'
-        then joinPath [current, path]
-        else path
+
+
+handleDownload Download{..} = do
+    let remote = if checkRemotePath
+                then error ("要下载的路径必须是一个文件：" ++ file)
+                else file
+
+    local <- absFilePath path
+    let local' = rp remote local
+    ex <- doesFileExist local'
+    isDir <- doesDirectoryExist local'
+    if not overwrite && (ex || isDir)
+      then printf ("%s 已经存在或者路径是一个目录, " ++
+                      "使用-o or --overwrite 可以覆盖本地文件\n") local'
+      else Api.download remote local'
+  where
+    checkRemotePath = "/" `isSuffixOf` file
+    rp remote local= if "/" `isSuffixOf` local
+                        then joinPath [local, takeFileName remote]
+                        else local
+
+
+handleUpload Upload{..} = do
+    local <- absFilePath file
+    ex <- doesFileExist local
+    if not ex
+      then printf "本地文件%s不存在！"
+      else Api.upload (rp file local) local overwrite
+  where
+    rp remotePath localFile =
+          if "/" `isSuffixOf` remotePath
+              then joinPath [remotePath, takeFileName localFile]
+              else remotePath
+
+
+

@@ -25,8 +25,8 @@ import           Data.Attoparsec
 import           Data.Attoparsec.Number
 import           Data.ByteString            (ByteString)
 import qualified Data.ByteString.Lazy       as L
-import qualified Data.ByteString.Lazy.UTF8  as U
 import qualified Data.ByteString.Lazy.Char8 as LC
+import qualified Data.ByteString.Lazy.UTF8  as U
 import qualified Data.Map                   as Map
 
 import           Network                    (withSocketsDo)
@@ -34,7 +34,7 @@ import           Network.HTTP.Conduit
 import           Network.HTTP.Types.Method  (Method, StdMethod (GET, POST),
                                              methodGet, methodPost)
 import           Network.HTTP.Types.Status
-import           System.Directory           (getHomeDirectory, doesFileExist)
+import           System.Directory           (doesFileExist, getHomeDirectory)
 import           System.Environment         (getArgs)
 import           System.FilePath
 import           System.IO
@@ -56,7 +56,7 @@ newTokenIfNonLocalExisted :: IO Vars
 newTokenIfNonLocalExisted = currentTokenConfig >>= process
     where
         process ac@Vars {token = Nothing, ..} = askNewAccessToken
-        process ac = return  ac
+        process ac = return ac
 
 
 currentToken :: IO (Maybe TokenResp)
@@ -78,7 +78,7 @@ askNewAccessToken = do
     dcResp <- deviceCodeAuth conf
     tok <- requestForAccessToken conf dcResp
     return Vars { appConfig = conf, token = Just tok }
-    
+
 --
 openApiUrl, openApiVersion, scope, oAuthUrl, deviceAuthUrl, tokenUrl :: String
 openApiUrl = "https://openapi.baidu.com"
@@ -94,7 +94,7 @@ convertStringPairToBS = map2 (LC.toStrict . LC.pack)
 
 
 requestForAccessToken :: AppConfig -> DeviceCodeResp -> IO TokenResp
-requestForAccessToken (AppConfig {appKey, secret, ..}) dc = do
+requestForAccessToken AppConfig{..} dc = do
         resp <- doRequest tokenUrl params POST
         let resp' = handleJSONResponse resp :: Either TokenResp Err
         case resp' of
@@ -110,7 +110,7 @@ requestForAccessToken (AppConfig {appKey, secret, ..}) dc = do
                 ("client_secret", secret)]
 
 
-deviceCodeAuth AppConfig {appKey, ..} = do
+deviceCodeAuth AppConfig{..} = do
         resp <- doRequest deviceAuthUrl params POST
         let r = handleJSONResponse resp :: Either DeviceCodeResp Err
         case handleJSONResponse resp of
@@ -139,10 +139,10 @@ loadAppConfig :: IO AppConfig
 loadAppConfig = do
         f <- appConfigFile
         e <- doesFileExist f
-        cont <- if not e 
+        cont <- if not e
             then error ("需要App配置文件: " ++ f ++ "\n格式: " ++
                     (U.toString . encode $ AppConfig "your app key" "your app secret" "your app path"))
-            else L.readFile f 
+            else L.readFile f
         case eitherDecode cont of
             Left err -> error $ "读取App配置出错：" ++ err
             Right conf -> return conf
@@ -155,7 +155,7 @@ data Err = Err {
     } deriving Show
 
 instance FromJSON Err where
-    parseJSON (Object v) = 
+    parseJSON (Object v) =
             Err <$> v .: "error"
                 <*> v .: "error_description"
 
@@ -170,12 +170,12 @@ data DeviceCodeResp = DeviceCodeResp {
 
 
 instance FromJSON DeviceCodeResp where
-    parseJSON (Object v) = 
+    parseJSON (Object v) =
         DeviceCodeResp <$> v .: "device_code"
-                       <*> v .: "user_code" 
-                       <*> v .: "verification_url" 
-                       <*> v .: "qrcode_url" 
-                       <*> v .: "expires_in" 
+                       <*> v .: "user_code"
+                       <*> v .: "verification_url"
+                       <*> v .: "qrcode_url"
+                       <*> v .: "expires_in"
                        <*> v .: "interval"
 
 
@@ -189,39 +189,39 @@ data TokenResp = TokenResp {
     } deriving (Show, Eq)
 
 instance FromJSON TokenResp where
-    parseJSON (Object v) = 
-        TokenResp <$> v .: "access_token" 
-                  <*> v .: "expires_in" 
-                  <*> v .: "refresh_token" 
-                  <*> v .: "scope" 
-                  <*> v .: "session_key" 
+    parseJSON (Object v) =
+        TokenResp <$> v .: "access_token"
+                  <*> v .: "expires_in"
+                  <*> v .: "refresh_token"
+                  <*> v .: "scope"
+                  <*> v .: "session_key"
                   <*> v .: "session_secret"
 
 
-data AppConfig = AppConfig { 
-        appKey :: String,
-        secret :: String,
-        appPath :: FilePath 
+data AppConfig = AppConfig {
+        appKey  :: String,
+        secret  :: String,
+        appPath :: FilePath
       } deriving (Show, Eq)
 
 
 instance FromJSON AppConfig where
-    parseJSON (Object v) = 
+    parseJSON (Object v) =
         AppConfig <$> v .: "appKey"
                   <*> v .: "secretKey"
                   <*> v .: "appPath"
 
 
 instance ToJSON AppConfig where
-    toJSON AppConfig {appKey, secret, appPath} = 
+    toJSON AppConfig {appKey, secret, appPath} =
         object [ "appKey"    .= appKey
                , "secretKey" .= secret
-               , "appPath"   .= appPath 
+               , "appPath"   .= appPath
                ]
 
 
 data Vars = Vars {
     appConfig :: AppConfig,
-    token :: Maybe TokenResp
-} deriving Show 
+    token     :: Maybe TokenResp
+} deriving Show
 
