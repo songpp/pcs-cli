@@ -1,4 +1,3 @@
-
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE LambdaCase         #-}
 {-# LANGUAGE RecordWildCards    #-}
@@ -10,7 +9,7 @@ import           Api
 import           Control.Applicative
 import           Control.Monad          (liftM, void)
 import           Data.Aeson
-import           Data.List              (isSuffixOf)
+import           Data.List              (isSuffixOf, isPrefixOf)
 import           System.Console.CmdArgs
 import           System.Directory
 import           System.Environment
@@ -18,11 +17,6 @@ import           System.FilePath
 import           Text.Printf            (printf)
 import           Token
 import           Util
-
-pcsUrl, cPcsUrl, dPcsUrl :: String
-pcsUrl = "https://pcs.baidu.com/rest/2.0/pcs/"
-cPcsUrl = "https://c.pcs.baidu.com/rest/2.0/pcs/"
-dPcsUrl = "https://d.pcs.baidu.com/rest/2.0/pcs/"
 
 
 data Args = Info
@@ -51,9 +45,9 @@ search = Search { basePath  = def &= opt "/" &= typ "PATH"
                   recursive = def &= help "是否递归搜索子文件夹"
               } &= name "search"  &= help "搜索文件"
 
-download = Download { file = def &= name "file" &= typ "FILE"
-                                 &= help "要下载的远程云盘文件路径，不需要附带APP路径"
-                    , path = def &= typ "FILE" &= help "要下载本地磁盘路径"
+download = Download { file      = def &= name "file" &= typ "FILE"
+                                      &= help "要下载的远程云盘文件路径，/表示APP根路径"
+                    , path      = def &= typ "FILE" &= help "要下载本地磁盘路径"
                     , overwrite = def
                                &= help "如果本地文件已经存在是否覆盖，默认不覆盖"
                     } &= name "download" &= help "下载文件到指定目录"
@@ -65,11 +59,13 @@ upload = Upload { file = def &= typ "FILE" &= help "要上传的文件"
                              &= help "是否覆盖云盘上已经存在的文件"
                 } &= name "upload" &= help "上传文件"
 
+
 main :: IO ()
 main = do
     cmd <- cmdArgs $ modes  [ auth, quota
                             , Main.search, Main.download
-                            , Main.upload ] &= program "pcs-console"
+                            , Main.upload 
+                            ] &= program "pcs-console"
     case cmd of
         --Info  -> currentTokenConfig >>= handleInfo
         Quota -> quotaInfo
@@ -80,10 +76,10 @@ main = do
 
 
 
-
+handleDownload :: Args -> IO ()
 handleDownload Download{..} = do
     let remote = if checkRemotePath
-                then error ("要下载的路径必须是一个文件：" ++ file)
+                then error ("要下载的路径必须是一个绝对路径文件：" ++ file)
                 else file
 
     local <- absFilePath path
@@ -95,12 +91,13 @@ handleDownload Download{..} = do
                       "使用-o or --overwrite 可以覆盖本地文件\n") local'
       else Api.download remote local'
   where
-    checkRemotePath = "/" `isSuffixOf` file
+    checkRemotePath = "/" `isSuffixOf` file || not ("/" `isPrefixOf` file)
     rp remote local= if "/" `isSuffixOf` local
                         then joinPath [local, takeFileName remote]
                         else local
 
 
+handleUpload :: Args -> IO () 
 handleUpload Upload{..} = do
     local <- absFilePath file
     ex <- doesFileExist local
