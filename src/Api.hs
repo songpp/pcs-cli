@@ -70,7 +70,7 @@ search path wd recur =
 
 -- |
 upload path file ovr =
-        currentTokenConfig >>= runReaderT uploadT >>= liftIO . handleDownloadResult
+        currentTokenConfig >>= runReaderT uploadT >>= liftIO . handleUploadResult
     where
         uploadT :: ReaderT Vars IO (Resp SearchResultItem)
         uploadT = do
@@ -91,9 +91,9 @@ upload path file ovr =
                         ("path", prependAppPath path v),
                         ("method", "upload") ]
 
-        handleDownloadResult (Right SearchResultItem{..}) =
+        handleUploadResult (Right SearchResultItem{..}) =
             printf "文件[ %s ]上传成功 PATH: %s\n"  file path
-        handleDownloadResult err = handleResult err
+        handleUploadResult err = handleResult err
 
 
 -- |
