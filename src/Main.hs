@@ -9,7 +9,7 @@ import           Api
 import           Control.Applicative
 import           Control.Monad          (liftM, void)
 import           Data.Aeson
-import           Data.List              (isSuffixOf, isPrefixOf)
+import           Data.List              (isPrefixOf, isSuffixOf)
 import           System.Console.CmdArgs
 import           System.Directory
 import           System.Environment
@@ -64,7 +64,7 @@ main :: IO ()
 main = do
     cmd <- cmdArgs $ modes  [ auth, quota
                             , Main.search, Main.download
-                            , Main.upload 
+                            , Main.upload
                             ] &= program "pcs-console"
     case cmd of
         --Info  -> currentTokenConfig >>= handleInfo
@@ -97,13 +97,13 @@ handleDownload Download{..} = do
                         else local
 
 
-handleUpload :: Args -> IO () 
+handleUpload :: Args -> IO ()
 handleUpload Upload{..} = do
     local <- absFilePath file
     ex <- doesFileExist local
     if not ex
-      then error "本地文件%s不存在！"
-      else Api.upload (rp file local) local overwrite
+      then error $ printf "本地文件%s不存在！" local
+      else Api.upload (rp path local) local overwrite
   where
     rp remotePath localFile =
           if "/" `isSuffixOf` remotePath

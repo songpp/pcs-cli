@@ -58,7 +58,7 @@ uploadFile url params f = withSocketsDo $ do
 
 
 
-sendRequest :: (FromJSON a, FromJSON b) 
+sendRequest :: (FromJSON a, FromJSON b)
             => String
             -> Map String String
             -> StdMethod
@@ -112,7 +112,7 @@ doRequest url param m = withSocketsDo $ do
 
 
 
-handleJSONResponse :: (FromJSON a, FromJSON b) 
+handleJSONResponse :: (FromJSON a, FromJSON b)
                    => Response L.ByteString
                    -> Either a b
 handleJSONResponse resp = if responseSuccess resp
@@ -160,7 +160,7 @@ absFilePath path = do
             (l : ps) -> if l /= '/'
                 then joinPath [current, path]
                 else path
-                
+
 
 isDebug :: IO Bool
 isDebug = liftM e2bool (lookupEnv "DEBUG")

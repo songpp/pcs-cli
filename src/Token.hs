@@ -19,7 +19,6 @@ module Token
 import           Control.Applicative
 import qualified Control.Exception          as E
 import           Control.Monad              (liftM)
-import           Control.Monad.Trans
 import           Data.Aeson
 import           Data.Attoparsec
 import           Data.Attoparsec.Number
@@ -55,7 +54,7 @@ tokenCachedFileFullPath = liftM (</> tokenCachedFileName) getHomeDirectory
 newTokenIfNonLocalExisted :: IO Vars
 newTokenIfNonLocalExisted = currentTokenConfig >>= process
     where
-        process ac@Vars {token = Nothing, ..} = askNewAccessToken
+        process Vars {token = Nothing, ..} = askNewAccessToken
         process ac = return ac
 
 
@@ -89,20 +88,21 @@ oAuthUrl = openApiUrl ++ "/oauth/" ++ openApiVersion
 deviceAuthUrl = oAuthUrl ++ "/device/code"
 tokenUrl = oAuthUrl ++ "/token"
 
-convertStringPairToBS = map2 (LC.toStrict . LC.pack)
-    where map2 f (a,b) = (f a, f b)
 
 
 requestForAccessToken :: AppConfig -> DeviceCodeResp -> IO TokenResp
 requestForAccessToken AppConfig{..} dc = do
+        putStrLn ">> 请求Token..."
         resp <- doRequest tokenUrl params POST
-        let resp' = handleJSONResponse resp :: Either TokenResp Err
+        let resp' = handleJSONResponse resp :: Either Err TokenResp
         case resp' of
-            Left t@(TokenResp { accessToken, refreshToken, ..}) -> do
+            Right t@TokenResp{} -> do
                 file' <- tokenCachedFileFullPath
+                printf ">> access token申请成功，写入以下文件：%s。\n" file'
                 writeFile file' (LC.unpack . responseBody $ resp)
+                putStrLn ">> 已完成token申请"
                 return t
-            Right err -> handleErr err
+            Left err -> handleErr err
     where
         params = Map.fromList [("grant_type","device_token"),
                 ("code", deviceCode dc),
@@ -110,19 +110,19 @@ requestForAccessToken AppConfig{..} dc = do
                 ("client_secret", secret)]
 
 
+deviceCodeAuth :: AppConfig -> IO DeviceCodeResp
 deviceCodeAuth AppConfig{..} = do
-        resp <- doRequest deviceAuthUrl params POST
-        let r = handleJSONResponse resp :: Either DeviceCodeResp Err
-        case handleJSONResponse resp of
-            Left dcResp -> do
+        resp <- sendRequest deviceAuthUrl params POST
+        case resp of
+            Right d@DeviceCodeResp{..} -> do
                 printf ">> 去这个地址[ %s ]，\n输入Code: [ %s ]\n"
-                    (verifyUrl dcResp) (userCode dcResp)
-                printf ">> 或者去这个地址直接扫描二维码授权：%s\n" (qrCodeUrl dcResp)
+                    verifyUrl userCode
+                printf ">> 或者去这个地址直接扫描二维码授权：%s\n" qrCodeUrl
                 printf ">> 完成授权后按输入任意字符后回车继续..\n >> "
                 _ <- getLine
-                return dcResp
-            Right err ->
-                error $ printf "请求出错了：[%s] [%s]\n" (errCode err) (description err)
+                return d
+            Left Err{..} ->
+                error $ printf "请求出错了：[%s] [%s]\n" errCode description
 
     where
         params = Map.fromList [ ("client_id", appKey)
@@ -130,22 +130,25 @@ deviceCodeAuth AppConfig{..} = do
                               , ("response_type", "device_code")]
 
 
-handleErr (Err {errCode, description}) =
+handleErr Err{..} =
     error $ printf "请求出错了：[%s] [%s]\n" errCode description
 
+
+convertStringPairToBS = map2 (LC.toStrict . LC.pack)
+    where map2 f (a,b) = (f a, f b)
 
 
 loadAppConfig :: IO AppConfig
 loadAppConfig = do
-        f <- appConfigFile
-        e <- doesFileExist f
-        cont <- if not e
-            then error ("需要App配置文件: " ++ f ++ "\n格式: " ++
-                    (U.toString . encode $ AppConfig "your app key" "your app secret" "your app path"))
-            else L.readFile f
-        case eitherDecode cont of
-            Left err -> error $ "读取App配置出错：" ++ err
-            Right conf -> return conf
+    f <- appConfigFile
+    e <- doesFileExist f
+    cont <- if not e
+        then error ("需要App配置文件: " ++ f ++ "\n格式: " ++
+                (U.toString . encode $ AppConfig "your app key" "your app secret" "your app path"))
+        else L.readFile f
+    case eitherDecode cont of
+        Left err -> error $ "读取App配置出错：" ++ err
+        Right conf -> return conf
 
 
 
