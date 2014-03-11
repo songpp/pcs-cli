@@ -40,12 +40,12 @@ import           Text.Printf                           (printf)
 type Params = Map String String
 
 
-
 uploadFile :: String -> Params -> String -> IO (Response L.ByteString)
 uploadFile url params f = withSocketsDo $ do
         --printf "uploading file %s" f
         req <- parseUrl url
-        let req' = req { method = methodPost }
+        let req' = req {checkStatus = \_ _ _ -> Nothing,
+                        method = methodPost, responseTimeout = Just $ truncate 120e6 }
         request <- formDataBody body req'
         withUncheckedManager $ httpLbs request
     where
@@ -100,7 +100,8 @@ doRequest url param m = withSocketsDo $ do
             ( LC.unpack . LC.fromStrict $ host req)
             ( LC.unpack . LC.fromStrict $ queryString req)
         -}
-        withUncheckedManager $ httpLbs req
+        let rr = req { responseTimeout = Just $ truncate 30e6 }
+        withUncheckedManager $ httpLbs rr
     where
         appendParamToUrl = printf "%s%c%s" url sep (joinParams param)
         sep = if '?' `elem` url then '&' else '?'

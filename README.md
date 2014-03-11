@@ -38,7 +38,22 @@ Build & Install
 		}
 
 3. 然后执行以下命令取得Token：`pcs-cli auth` 。AccessToken会保存在这个文件:`.pcs-cli.token.json`, 即token请求的http返回内容，可以通过其他工具获得就可以跳过这个token步骤。
+
+		{
+			"expires_in":2592000,
+			"refresh_token":"27.f939971e26ddf46976a00085dcd4360b.2276084",
+			"access_token":"26.a0356d7ba4a1ca9c4b6f17165ee8444f.2276084",
+			"session_secret":"....................",
+			"session_key":"....................",
+			"scope":"basic super_msg netdisk"
+		}
+
 4. 使用`pcs-cli --help`查看都支持哪些命令， 也可以取得子命令的帮助：`pcs-cli search --help`
+
+
+* 上传多个文件
+		
+		for z in $(find . -name '*.zip'); do pcs-cli upload -f $z -p /backup/ -o ; done
 
 
 
