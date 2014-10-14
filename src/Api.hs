@@ -31,6 +31,7 @@ import           System.FilePath
 import           Text.Printf                (printf)
 import           Token
 import           Util
+import           Data.List.Utils            (replace)
 
 
 type Resp a = Either Err a
@@ -133,7 +134,8 @@ download path targetPath =
 
 
 prependAppPath :: String -> Vars -> String
-prependAppPath p = normalise . (++ p) . appPath . appConfig
+prependAppPath p = replace "\\" "/" . normalise . (++ p) . appPath . appConfig
+
 
 
 pcsUrl, cPcsUrl, dPcsUrl :: String

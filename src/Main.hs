@@ -11,7 +11,7 @@ import           Data.Aeson
 import           Data.List              (isPrefixOf, isSuffixOf)
 import           System.Console.CmdArgs
 import           System.Directory
-import           System.Environment
+import           System.Environment     
 import           System.FilePath
 import           Text.Printf            (printf)
 import           Token
@@ -61,10 +61,10 @@ upload = Upload { file = def &= typ "FILE" &= help "要上传的文件"
 
 main :: IO ()
 main = do
-    cmd <- cmdArgs $ modes  [ auth, quota
-                            , Main.search, Main.download
-                            , Main.upload
-                            ] &= program "pcs-console"
+    args <- getArgs
+    cmd <- (if null args then withArgs ["--help"] else id) . cmdArgs $ modes  [ auth, quota
+                            , Main.search, Main.download , Main.upload
+                            ] &= program "pcs-cli"
     case cmd of
         --Info  -> currentTokenConfig >>= handleInfo
         Quota -> quotaInfo
