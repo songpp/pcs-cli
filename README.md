@@ -34,7 +34,7 @@ Build & Install
 		{
 			"appKey" : "<app的API KEY>",
 			"secretKey" : "<app的Secret Key>",
-			"appPath" : "<app的PCS PATH, 比如： /app/cli >"
+			"appPath" : "<app的PCS PATH, 比如： /apps/cli >"
 		}
 
 3. 然后执行以下命令取得Token：`pcs-cli auth` 。AccessToken会保存在这个文件:`.pcs-cli.token.json`, 即token请求的http返回内容，可以通过其他工具获得就可以跳过这个token步骤。
