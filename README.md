@@ -29,12 +29,12 @@ Build & Install
 ----
 
 1. [注册一个百度APP](http://developer.baidu.com/console#app/project), 开启PCS API
-2. 在当前的用户帐号根目录（`~/`）下创建文件`.pcs-cli.app.json`,格式如下：
+2. 在当前的用户帐号根目录（unix: `~/`,  windows:`C:/Users/<your account name>/`）下创建文件`.pcs-cli.app.json`,格式如下：
 
 		{
 			"appKey" : "<app的API KEY>",
 			"secretKey" : "<app的Secret Key>",
-			"appPath" : "<app的PCS PATH>"
+			"appPath" : "<app的PCS PATH, 比如： /app/cli >"
 		}
 
 3. 然后执行以下命令取得Token：`pcs-cli auth` 。AccessToken会保存在这个文件:`.pcs-cli.token.json`, 即token请求的http返回内容，可以通过其他工具获得就可以跳过这个token步骤。
@@ -56,6 +56,9 @@ Build & Install
 		for z in $(find . -name '*.zip'); do pcs-cli upload -f $z -p /backup/ -o ; done
 
 
+* 搜索
+		
+		pcs-cli search -r -k pdf
 
 DEBUG
 ----
