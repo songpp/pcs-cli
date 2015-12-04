@@ -1,6 +1,4 @@
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE OverloadedStrings #-}
-
+{-#LANGUAGE RecordWildCards, NamedFieldPuns, OverloadedStrings, FlexibleContexts#-}
 
 module Util where
 
@@ -9,13 +7,9 @@ import qualified Control.Exception                     as E
 import           Control.Monad
 import           Control.Monad.Trans
 import           Data.Aeson
-import           Data.Attoparsec
-import           Data.Attoparsec.Number
 import           Data.ByteString                       (ByteString)
 import qualified Data.ByteString.Lazy                  as L
 import qualified Data.ByteString.Lazy.Char8            as LC
-import           Data.Conduit
-import qualified Data.Conduit.Binary                   as CB
 import           Data.Map.Strict                       (Map)
 import qualified Data.Map.Strict                       as Map
 import qualified Data.Text                             as T
@@ -35,81 +29,84 @@ import           System.Environment
 import           System.FilePath
 import           Text.Printf                           (printf)
 
+import Control.Monad.Trans.Resource (runResourceT)
 
+defaultManager = newManager (mkManagerSettings (TLSSettingsSimple True False False) Nothing)
 
 type Params = Map String String
 
 
-uploadFile :: String -> Params -> String -> IO (Response L.ByteString)
-uploadFile url params f = withSocketsDo $ do
-        --printf "uploading file %s" f
-        req <- parseUrl url
-        let req' = req {checkStatus = \_ _ _ -> Nothing,
-                        method = methodPost, responseTimeout = Just $ truncate 120e6 }
-        request <- formDataBody body req'
-        withUncheckedManager $ httpLbs request
-    where
-        body = fpart : Map.foldlWithKey
-                            (\a k v -> pair2PartBs k v : a) [] params
-
-        pair2PartBs k v = partBS (T.pack k) (toUtf8BS v)
-        fpart = partFileSource "file" f
-        toUtf8BS = TE.encodeUtf8 . T.pack
+uploadFile :: Manager -> String -> Params -> String -> IO (Response L.ByteString)
+uploadFile mgr url params f = withSocketsDo $ do
+    --printf "uploading file %s" f
+    req <- parseUrl url
+    let req' = req {checkStatus = \_ _ _ -> Nothing,
+                    method = methodPost, responseTimeout = Just $ truncate 120e6 }
+    request <- formDataBody body req'
+    httpLbs request mgr
+  where
+    body = fpart : Map.foldlWithKey
+                        (\a k v -> pair2PartBs k v : a) [] params
+    pair2PartBs k v = partBS (T.pack k) (toUtf8BS v)
+    fpart = partFileSource "file" f
+    toUtf8BS = TE.encodeUtf8 . T.pack
 
 
 
 sendRequest :: (FromJSON a, FromJSON b)
-            => String
+            => Manager
+            -> String
             -> Map String String
             -> StdMethod
             -> IO (Either a b)
-sendRequest url params m = do
-        resp' <- doRequest url params m
-        debug <- isDebug
-        when debug $
-            printf " << response: %s ... \n"
-                (LC.unpack $ responseBody resp')
-        let resp = handleJSONResponse resp'
-        return resp
+sendRequest mgr url params m = do
+    resp' <- doRequest mgr url params m
+    debug <- isDebug
+    when debug $
+        printf " << response: %s ... \n"
+            (LC.unpack $ responseBody resp')
+    let resp = handleJSONResponse resp'
+    return resp
 
 
-doRequest :: String
+doRequest :: Manager
+          -> String
           -> Map String String
           -> StdMethod
           -> IO (Response L.ByteString)
-doRequest url param m = withSocketsDo $ do
-        debug <- isDebug
-        when debug $ do
-                printf ">> %s: [ %s ] \n" (show m) url
-                printf ">>>> param: [ %s ] \n" (joinParams param)
-        req <- case m of
-            GET -> do
-                let url' = appendParamToUrl
-                req <- parseUrl url'
-                let req' = req { checkStatus = check, method = methodGet }
-                return req'
-            POST -> do
-                req <- parseUrl url
-                let req' = req { checkStatus = check, method = methodPost }
-                return $ if Map.null param
-                    then req'
-                    else urlEncodedBody (conv' param) req'
+doRequest mgr url param m = withSocketsDo $ do
+    debug <- isDebug
+    when debug $ do
+            printf ">> %s: [ %s ] \n" (show m) url
+            printf ">>>> param: [ %s ] \n" (joinParams param)
+    req <- case m of
+        GET -> do
+            let url' = appendParamToUrl
+            req <- parseUrl url'
+            let req' = req { checkStatus = check, method = methodGet }
+            return req'
+        POST -> do
+            req <- parseUrl url
+            let req' = req { checkStatus = check, method = methodPost }
+            return $ if Map.null param
+                then req'
+                else urlEncodedBody (conv' param) req'
         {-
         printf " >> %s: %s%s \n"
             ( LC.unpack . LC.fromStrict $ method req)
             ( LC.unpack . LC.fromStrict $ host req)
             ( LC.unpack . LC.fromStrict $ queryString req)
         -}
-        let rr = req { responseTimeout = Just $ truncate 30e6 }
-        withUncheckedManager $ httpLbs rr
-    where
-        appendParamToUrl = printf "%s%c%s" url sep (joinParams param)
-        sep = if '?' `elem` url then '&' else '?'
+    let rr = req { responseTimeout = Just $ truncate 30e6 }
+    httpLbs rr mgr
+  where
+    appendParamToUrl = printf "%s%c%s" url sep (joinParams param)
+    sep = if '?' `elem` url then '&' else '?'
 
-        conv' = Map.foldlWithKey (\acc k v -> (toBS' k, toBS' v):acc ) []
-        toBS' = LC.toStrict . LC.pack
+    conv' = Map.foldlWithKey (\acc k v -> (toBS' k, toBS' v):acc ) []
+    toBS' = LC.toStrict . LC.pack
 
-        check _ _ _ = Nothing
+    check _ _ _ = Nothing
 
 
 
@@ -117,15 +114,10 @@ handleJSONResponse :: (FromJSON a, FromJSON b)
                    => Response L.ByteString
                    -> Either a b
 handleJSONResponse resp = if responseSuccess resp
-        then Right $ decodeRespBody body
-        else Left $ decodeRespBody body
-    where
-        body = responseBody resp
-
-
-withUncheckedManager = withManagerSettings sts
-    where
-        sts = mkManagerSettings (TLSSettingsSimple True False False) Nothing
+    then Right $ decodeRespBody body
+    else Left $ decodeRespBody body
+  where
+    body = responseBody resp
 
 
 decodeRespBody :: FromJSON b => L.ByteString -> b
@@ -136,9 +128,8 @@ decodeRespBody cont = case eitherDecode cont of
 
 responseSuccess :: Response L.ByteString -> Bool
 responseSuccess = valid' . statusCode . responseStatus
-    where
-        valid' c = c == 200
-
+  where
+    valid' c = c == 200
 
 
 buildUrl :: String -> Map String String -> String
@@ -152,20 +143,20 @@ joinParams = drop 1 . Map.foldlWithKey (\acc k v ->
 
 absFilePath :: String -> IO String
 absFilePath path = do
-        home <- getHomeDirectory
-        current <- getCurrentDirectory
-        return $ makeAbsFilePath home current path
-    where
-        makeAbsFilePath home current path = case normalise path of
-            ('~' : '/' : ps) -> joinPath [home, ps]
-            (l : ps) -> if l /= '/'
-                then joinPath [current, path]
-                else path
+    home <- getHomeDirectory
+    current <- getCurrentDirectory
+    return $ makeAbsFilePath home current path
+  where
+    makeAbsFilePath home current path = case normalise path of
+        ('~' : '/' : ps) -> joinPath [home, ps]
+        (l : ps) -> if l /= '/'
+            then joinPath [current, path]
+            else path
 
 
 isDebug :: IO Bool
 isDebug = liftM e2bool (lookupEnv "DEBUG")
-    where
-        e2bool (Just "1") = True
-        e2bool _          = False
+  where
+    e2bool (Just "1") = True
+    e2bool _          = False
 

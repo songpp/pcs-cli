@@ -1,12 +1,17 @@
-{-# LANGUAGE NamedFieldPuns    #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-#LANGUAGE RankNTypes, RecordWildCards, NamedFieldPuns,
+    OverloadedStrings, FlexibleContexts #-}
 
 module Api
         ( quotaInfo
         , download
         , search
         , upload
+        , Quota
+        , Err
+        , SearchResult
+        , SearchResultItem
+        , DownloadResult
+        , Resp
         ) where
 
 import           Control.Applicative
@@ -32,41 +37,79 @@ import           Text.Printf                (printf)
 import           Token
 import           Util
 import           Data.List.Utils            (replace)
+import PCS
 
 
 type Resp a = Either Err a
 type RawResponse = Response L.ByteString
 
 
-
--- | 查询配额和使用情况
-quotaInfo =
-        currentTokenConfig >>= runReaderT quotaInfoT >>= liftIO . handleResult
-    where
-        quotaInfoT :: ReaderT Vars IO (Resp Quota)
-        quotaInfoT = do
-            vs <- ask
-            let params = mkParams vs
-            liftIO $ sendRequest baseUrl params GET
-
-        baseUrl = pcsUrl ++ "quota"
-        mkParams v = Map.fromList [("method", "info"), accessTokenParam v]
+quotaInfo :: PcsT m (Resp Quota)
+quotaInfo = do
+    PcsConfig {vars, pcsManager} <- ask
+    liftIO $ sendRequest pcsManager baseUrl (mkParams vars) GET
+  where
+    baseUrl = pcsUrl ++ "quota"
+    mkParams v = Map.fromList [("method", "info"), accessTokenParam v]
 
 
-search path wd recur =
-        currentTokenConfig >>= runReaderT searchT >>= liftIO . handleResult
-    where
-        searchT :: ReaderT Vars IO (Resp SearchResult)
-        searchT = do
-            vs <- ask
-            let params = Map.fromList [("wd", wd),
-                    ("path", prependAppPath path vs),
-                    ("access_token", extractAccToken vs),
-                    ("method", "search"),
-                    ("re", if recur then "1" else "0")]
-            liftIO $ sendRequest url params GET
-        url = pcsUrl ++ "file"
+search :: FilePath -> String -> Bool -> PcsT m (Resp SearchResult)
+search path keyword recursive = do
+    PcsConfig {vars, pcsManager} <- ask
+    let params = Map.fromList [("wd", keyword),
+            ("path", prependAppPath path vars),
+            ("access_token", extractAccToken vars),
+            ("method", "search"),
+            ("re", if recursive then "1" else "0")]
+    liftIO $ sendRequest pcsManager url params GET
+  where
+    url = pcsUrl ++ "file"
 
+
+upload :: String -> String -> Bool -> PcsT m (Resp SearchResultItem)
+upload path file overwrite = do
+    PcsConfig {vars, pcsManager} <- ask
+    let url = mkUrl vars
+    liftIO $ do
+        r <- uploadFile pcsManager url Map.empty file :: IO RawResponse
+        return $ handleJSONResponse r
+  where
+    mkUrl :: Vars -> String
+    mkUrl v = buildUrl baseUrl (mkParams v)
+    baseUrl :: String
+    baseUrl = cPcsUrl ++ "file"
+    mkParams v = Map.fromList [accessTokenParam v,
+                    ("ondup", if overwrite then "overwrite" else "newcopy"),
+                    ("path", prependAppPath path v),
+                    ("method", "upload") ]
+
+download :: String -> String -> PcsT m (Resp DownloadResult)
+download path targetPath = do
+    PcsConfig {vars, pcsManager} <- ask
+    liftIO $ doRequest pcsManager (mkUrl vars) Map.empty GET >>= \r ->
+                if responseSuccess r
+                then liftM Right (handleResponse r)
+                else return $ Left (parseResponseJSON $ responseBody r)
+  where
+    handleResponse :: RawResponse -> IO DownloadResult
+    handleResponse response =
+        L.writeFile targetPath (responseBody response) >>
+        return (DownloadResult path targetPath)
+
+
+    parseResponseJSON body = fromMaybe
+        (error $ "parse JSON result error: " ++ LC.unpack body)
+        (decode body)
+
+    mkUrl v = buildUrl baseUrl (mkParams v)
+
+    baseUrl :: String
+    baseUrl = dPcsUrl ++ "file"
+    mkParams v = Map.fromList [accessTokenParam v,
+                ("method", "download"),
+                ("path", prependAppPath path v)]
+
+{-
 
 -- |
 upload path file ovr =
@@ -131,7 +174,7 @@ download path targetPath =
             printf "文件[ %s ]下载成功： %s\n" path target
         handleDownloadResult err = handleResult err
 
-
+-}
 
 prependAppPath :: String -> Vars -> String
 prependAppPath p = replace "\\" "/" . normalise . (++ p) . appPath . appConfig

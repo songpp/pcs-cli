@@ -1,44 +1,46 @@
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE RecordWildCards    #-}
-{-# LANGUAGE UnicodeSyntax      #-}
+{-#LANGUAGE RankNTypes, FlexibleContexts, RecordWildCards,
+  NamedFieldPuns, OverloadedStrings, DeriveDataTypeable,
+  StandaloneDeriving, GADTs #-}
 
 module Main where
 
-import           Api
+import qualified Api
 import           Control.Applicative
 import           Control.Monad          (liftM, void)
 import           Data.Aeson
 import           Data.List              (isPrefixOf, isSuffixOf)
 import           System.Console.CmdArgs
 import           System.Directory
-import           System.Environment     
+import           System.Environment
 import           System.FilePath
 import           Text.Printf            (printf)
 import           Token
+import PCS
 import           Util
 
+data Args where
+  Info :: Args
+  Auth :: Args
+  Quota :: Args
+  Search :: { basePath  :: String
+           , keyword   :: String
+           , recursive :: Bool } -> Args
+  Upload :: { file      :: FilePath
+           , path      :: FilePath
+           , overwrite :: Bool } -> Args
+  Download :: { file      :: FilePath
+             , path      :: FilePath
+             , overwrite :: Bool } -> Args
 
-data Args = Info
-          | Auth
-          | Quota
-          | Search { basePath  :: String
-                   , keyword   :: String
-                   , recursive :: Bool
-                   }
-          | Upload { file      :: FilePath
-                   , path      :: FilePath
-                   , overwrite :: Bool
-                   }
-          | Download { file      :: FilePath
-                     , path      :: FilePath
-                     , overwrite :: Bool
-                     }
-    deriving (Show, Data, Typeable)
+deriving instance Show Args
+deriving instance Data Args
+deriving instance Typeable Args
 
 info = Info &= name "info"
 auth = Auth &= name "auth" &= help "申请Token，采用DeviceCode方式。"
 quota = Quota &= name "quota" &= help "查询空间使用情况"
-search = Search { basePath  = def &= opt "/" &= typ "PATH"
+search = Search { basePath  = def &= opt ("/" :: String)
+                                  &= typ "PATH"
                                   &= help "在这个路径下搜索，默认 / (APP的根目录)",
                   keyword   = def &= help "关键字" ,
                   recursive = def &= help "是否递归搜索子文件夹"
@@ -62,52 +64,62 @@ upload = Upload { file = def &= typ "FILE" &= help "要上传的文件"
 main :: IO ()
 main = do
     args <- getArgs
-    cmd <- (if null args then withArgs ["--help"] else id) . cmdArgs $ modes  [ auth, quota
-                            , Main.search, Main.download , Main.upload
-                            ] &= program "pcs-cli"
-    case cmd of
-        --Info  -> currentTokenConfig >>= handleInfo
-        Quota -> quotaInfo
-        Auth  -> void askNewAccessToken
-        Search{..} -> Api.search basePath keyword recursive
-        d @ Download{} -> handleDownload d
-        u @ Upload {} -> handleUpload u
+    cmd <- (if null args then withArgs ["--help"] else id) . cmdArgs
+                 $ modes  [ auth, quota
+                          , Main.search, Main.download , Main.upload
+                          ] &= program "pcs-cli"
+
+    config <- readAppConfig
+    run cmd config
 
 
+class HandleCommand a where
+  run :: a -> PcsConfig -> IO ()
 
-handleDownload :: Args -> IO ()
-handleDownload Download{..} = do
-    let remote = if checkRemotePath
-                then error ("要下载的路径必须是一个绝对路径文件：" ++ file)
-                else file
+instance HandleCommand Args where
+  -- | 查询空间
+  run Quota c = runPcsT c Api.quotaInfo >>= print
 
-    local <- absFilePath path
-    let local' = rp remote local
-    ex <- doesFileExist local'
-    isDir <- doesDirectoryExist local'
-    if not overwrite && (ex || isDir)
-      then printf ("%s 已经存在或者路径是一个目录, " ++
-                      "使用-o or --overwrite 可以覆盖本地文件\n") local'
-      else Api.download remote local'
-  where
-    checkRemotePath = "/" `isSuffixOf` file || not ("/" `isPrefixOf` file)
-    rp remote local= if "/" `isSuffixOf` local
-                        then joinPath [local, takeFileName remote]
-                        else local
+  -- | 搜索文件
+  run Search{..} c = runPcsT c (Api.search basePath keyword recursive) >>= print
 
+  -- | 下载
+  run Download{..} c = do
+      let remote = if checkRemotePath
+                    then error ("要下载的路径必须是一个绝对路径文件：" ++ file)
+                    else file
 
-handleUpload :: Args -> IO ()
-handleUpload Upload{..} = do
-    local <- absFilePath file
-    ex <- doesFileExist local
-    if not ex
-      then error $ printf "本地文件%s不存在！" local
-      else Api.upload (rp path local) local overwrite
-  where
-    rp remotePath localFile =
-          if "/" `isSuffixOf` remotePath
-              then joinPath [remotePath, takeFileName localFile]
-              else remotePath
+      local <- absFilePath path
+      let local' = rp remote local
+      ex <- doesFileExist local'
+      isDir <- doesDirectoryExist local'
+      if not overwrite && (ex || isDir)
+        then printf ("%s 已经存在或者路径是一个目录, " ++
+                        "使用-o or --overwrite 可以覆盖本地文件\n") local'
+        else do
+              result <- runPcsT c (Api.download remote local')
+              print result
+    where
+      checkRemotePath = "/" `isSuffixOf` file || not ("/" `isPrefixOf` file)
+      rp remote local= if "/" `isSuffixOf` local
+                          then joinPath [local, takeFileName remote]
+                          else local
 
+  -- | 上传
+  run Upload{..}  c = do
+      local <- absFilePath file
+      ex <- doesFileExist local
+      if not ex
+        then error $ printf "本地文件%s不存在！" local
+        else do
+              result <- runPcsT c (Api.upload (rp path local) local overwrite)
+              print result
+    where
+      rp remotePath localFile =
+            if "/" `isSuffixOf` remotePath
+                then joinPath [remotePath, takeFileName localFile]
+                else remotePath
 
+  -- | 申请新token
+  run Auth c = void askNewAccessToken
 

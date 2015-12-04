@@ -1,7 +1,9 @@
 .cabal-sandbox
+.stack-work
 cabal.sandbox.config
 *.hi
 *.o
 dist
 .dist-buildwrapper
 .project
+cache

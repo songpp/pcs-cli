@@ -1,8 +1,6 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE UnicodeSyntax     #-}
-
 
 module Token
         ( TokenResp(..)
@@ -18,8 +16,6 @@ import           Control.Applicative
 import qualified Control.Exception          as E
 import           Control.Monad              (liftM)
 import           Data.Aeson
-import           Data.Attoparsec
-import           Data.Attoparsec.Number
 import           Data.ByteString            (ByteString)
 import qualified Data.ByteString.Lazy       as L
 import qualified Data.ByteString.Lazy.Char8 as LC
@@ -71,9 +67,10 @@ currentTokenConfig = do
 
 askNewAccessToken :: IO Vars
 askNewAccessToken = do
+    mgr <- defaultManager
     conf <- loadAppConfig
-    dcResp <- deviceCodeAuth conf
-    tok <- requestForAccessToken conf dcResp
+    dcResp <- deviceCodeAuth mgr conf
+    tok <- requestForAccessToken mgr conf dcResp
     return Vars { appConfig = conf, token = Just tok }
 
 --
@@ -88,42 +85,41 @@ tokenUrl = oAuthUrl ++ "/token"
 
 
 
-requestForAccessToken :: AppConfig -> DeviceCodeResp -> IO TokenResp
-requestForAccessToken AppConfig{..} dc = do
-        putStrLn ">> 请求Token..."
-        resp <- doRequest tokenUrl params POST
-        let resp' = handleJSONResponse resp :: Either Err TokenResp
-        case resp' of
-            Right t@TokenResp{} -> do
-                file' <- tokenCachedFileFullPath
-                printf ">> access token申请成功，写入以下文件：%s。\n" file'
-                writeFile file' (LC.unpack . responseBody $ resp)
-                putStrLn ">> 已完成token申请"
-                return t
-            Left err -> handleErr err
-    where
-        params = Map.fromList [("grant_type","device_token"),
-                ("code", deviceCode dc),
-                ("client_id", appKey),
-                ("client_secret", secret)]
+requestForAccessToken :: Manager -> AppConfig -> DeviceCodeResp -> IO TokenResp
+requestForAccessToken mgr AppConfig{..} dc = do
+    putStrLn ">> 请求Token..."
+    resp <- doRequest mgr tokenUrl params POST
+    let resp' = handleJSONResponse resp :: Either Err TokenResp
+    case resp' of
+        Right t@TokenResp{} -> do
+            file' <- tokenCachedFileFullPath
+            printf ">> access token申请成功，写入以下文件：%s。\n" file'
+            writeFile file' (LC.unpack . responseBody $ resp)
+            putStrLn ">> 已完成token申请"
+            return t
+        Left err -> handleErr err
+  where
+    params = Map.fromList [("grant_type","device_token"),
+            ("code", deviceCode dc),
+            ("client_id", appKey),
+            ("client_secret", secret)]
 
 
-deviceCodeAuth :: AppConfig -> IO DeviceCodeResp
-deviceCodeAuth AppConfig{..} = do
-        resp <- sendRequest deviceAuthUrl params POST
-        case resp of
-            Right d@DeviceCodeResp{..} -> do
-                printf ">> 去这个地址[ %s ]，\n输入Code: [ %s ]\n"
-                    verifyUrl userCode
-                printf ">> 或者去这个地址直接扫描二维码授权：%s\n" qrCodeUrl
-                printf ">> 完成授权后按输入任意字符后回车继续..\n >> "
-                _ <- getLine
-                return d
-            Left Err{..} ->
-                error $ printf "请求出错了：[%s] [%s]\n" errCode description
-
-    where
-        params = Map.fromList [ ("client_id", appKey)
+deviceCodeAuth :: Manager -> AppConfig -> IO DeviceCodeResp
+deviceCodeAuth mgr AppConfig{..} = do
+    resp <- sendRequest mgr deviceAuthUrl params POST
+    case resp of
+        Right d@DeviceCodeResp{..} -> do
+            printf ">> 去这个地址[ %s ]，\n输入Code: [ %s ]\n"
+                verifyUrl userCode
+            printf ">> 或者去这个地址直接扫描二维码授权：%s\n" qrCodeUrl
+            printf ">> 完成授权后按输入任意字符后回车继续..\n >> "
+            _ <- getLine
+            return d
+        Left Err{..} ->
+            error $ printf "请求出错了：[%s] [%s]\n" errCode description
+  where
+    params = Map.fromList [ ("client_id", appKey)
                               , ("scope", scope)
                               , ("response_type", "device_code")]
 
@@ -142,7 +138,8 @@ loadAppConfig = do
     e <- doesFileExist f
     cont <- if not e
         then error ("需要App配置文件: " ++ f ++ "\n格式: " ++
-                (U.toString . encode $ AppConfig "your app key" "your app secret" "your app path"))
+                (U.toString . encode $
+                    AppConfig "your app key" "your app secret" "your app path"))
         else L.readFile f
     case eitherDecode cont of
         Left err -> error $ "读取App配置出错：" ++ err
