@@ -10,15 +10,11 @@ matrix:
       addons: {apt: {packages: [cabal-install-head,ghc-7.10.2], sources: [hvr-ghc]}}
 
 
-
 before_install:
+  # stack
   - mkdir -p ~/.local/bin
-  - export PATH=$HOME/.local/bin:$PATH
-  - travis_retry curl -L https://github.com/commercialhaskell/stack/releases/download/v0.1.8.0/stack-0.1.8.0-linux-x86_64.tar.gz | tar xz -C ~/.local/bin
-
-install:
-  - stack --no-terminal test;
-
+  - export PATH=~/.local/bin:$PATH
+  - travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
 
 script: stack --no-terminal test;
 
