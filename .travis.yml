@@ -5,7 +5,7 @@ language: haskell
 matrix:
   include:
 
-    - env: BUILD=stack GHCVER=7.10.2 STACK_YAML=stack-travis.yaml
+    - env: BUILD=stack GHCVER=7.10.2
       compiler: ": #stack 7.10.2"
       addons: {apt: {packages: [cabal-install-head,ghc-7.10.2], sources: [hvr-ghc]}}
 
