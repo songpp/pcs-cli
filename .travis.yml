@@ -21,8 +21,4 @@ install: stack --no-terminal --skip-ghc-check setup
 script: stack --no-terminal --skip-ghc-check test;
 
 
-cache:
-    directories:
-        - $HOME/.ghc
-        - $HOME/.cabal
-        - $HOME/.stack
+cache: false
