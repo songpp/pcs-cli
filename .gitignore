@@ -6,4 +6,5 @@ cabal.sandbox.config
 dist
 .dist-buildwrapper
 .project
+input
 cache

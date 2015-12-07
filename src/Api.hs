@@ -8,9 +8,9 @@ module Api
         , upload
         , Quota
         , Err
-        , SearchResult
-        , SearchResultItem
-        , DownloadResult
+        , SearchResult(..)
+        , SearchResultItem(..)
+        , DownloadResult(..)
         , Resp
         ) where
 
