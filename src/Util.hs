@@ -1,4 +1,7 @@
-{-#LANGUAGE RecordWildCards, NamedFieldPuns, OverloadedStrings, FlexibleContexts#-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Util where
 
@@ -29,7 +32,7 @@ import           System.Environment
 import           System.FilePath
 import           Text.Printf                           (printf)
 
-import Control.Monad.Trans.Resource (runResourceT)
+import           Control.Monad.Trans.Resource          (runResourceT)
 
 defaultManager = newManager (mkManagerSettings (TLSSettingsSimple True False False) Nothing)
 

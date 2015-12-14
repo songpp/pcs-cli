@@ -1,5 +1,8 @@
-{-#LANGUAGE RankNTypes, RecordWildCards, NamedFieldPuns,
-    OverloadedStrings, FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE NamedFieldPuns    #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Api
         ( quotaInfo
@@ -23,6 +26,7 @@ import qualified Data.ByteString.Lazy.Char8 as LC
 import qualified Data.ByteString.UTF8       as U
 import qualified Data.Conduit               as C
 import           Data.Conduit.Binary        (sinkFile)
+import           Data.List.Utils            (replace)
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as Map
 import           Data.Maybe                 (fromMaybe)
@@ -32,12 +36,11 @@ import           Data.Text.Encoding         as E
 import qualified Data.Text.IO               as TIO
 import           Network.HTTP.Conduit
 import           Network.HTTP.Types.Method  (StdMethod (GET, POST))
+import           PCS
 import           System.FilePath
 import           Text.Printf                (printf)
 import           Token
 import           Util
-import           Data.List.Utils            (replace)
-import PCS
 
 
 type Resp a = Either Err a

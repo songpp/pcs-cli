@@ -1,6 +1,12 @@
-{-#LANGUAGE RankNTypes, FlexibleContexts, RecordWildCards,
-  NamedFieldPuns, OverloadedStrings, DeriveDataTypeable,
-  StandaloneDeriving, GADTs, MultiWayIf #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts   #-}
+{-# LANGUAGE GADTs              #-}
+{-# LANGUAGE MultiWayIf         #-}
+{-# LANGUAGE NamedFieldPuns     #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Main where
 
@@ -8,14 +14,15 @@ import           Api
 import           Control.Applicative
 import           Control.Monad          (liftM, void)
 import           Data.Aeson
-import           Data.List              (isPrefixOf, isSuffixOf, stripPrefix, intercalate)
+import           Data.List              (intercalate, isPrefixOf, isSuffixOf,
+                                         stripPrefix)
+import           PCS
 import           System.Console.CmdArgs
 import           System.Directory
 import           System.Environment
 import           System.FilePath
 import           Text.Printf            (printf)
 import           Token
-import PCS
 import           Util
 
 data Args where
