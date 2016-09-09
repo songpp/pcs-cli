@@ -4,10 +4,9 @@ language: haskell
 
 matrix:
   include:
-
-    - env: BUILD=stack GHCVER=7.10.2
-      compiler: ": #stack 7.10.2"
-      addons: {apt: {packages: [cabal-install-head,ghc-7.10.2], sources: [hvr-ghc]}}
+    - env: BUILD=stack GHCVER=8.0.1
+      compiler: ": #stack 8.0.1"
+      addons: {apt: {packages: [ghc-8.0.1], sources: [hvr-ghc]}}
 
 
 before_install:
