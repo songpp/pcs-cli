@@ -1,6 +1,8 @@
 pcs-cli
 =======
 
+[![Build Status](https://travis-ci.org/songpp/pcs-cli.svg?branch=master)](https://travis-ci.org/songpp/pcs-cli)
+
 CommandLine Baidu PCS
 
 目前仅支持：
