@@ -29,6 +29,7 @@ data Args where
   Info   :: Args
   Auth   :: Args
   Quota  :: Args
+  SimpleSearch :: { keyword :: String } -> Args
   Search :: { basePath  :: String
             , keyword   :: String
             , recursive :: Bool } -> Args
@@ -49,9 +50,13 @@ quota = Quota &= name "quota" &= help "查询空间使用情况"
 search = Search { basePath  = def &= opt ("/" :: String)
                                   &= typ "PATH"
                                   &= help "在这个路径下搜索，默认 / (APP的根目录)",
-                  keyword   = def &= help "关键字" ,
+                  keyword   = def &= typ "keyword" &= argPos 0,
                   recursive = def &= help "是否递归搜索子文件夹"
               } &= name "search"  &= help "搜索文件"
+
+find = SimpleSearch {
+  keyword = def &= typ "keyword" &= argPos 0
+  } &= name "find" &= help "在整个app目录下搜索文件"
 
 download = Download { file      = def &= name "file" &= typ "FILE"
                                       &= help "要下载的远程云盘文件路径，/表示APP根路径"
@@ -72,7 +77,8 @@ main :: IO ()
 main = do
     args <- getArgs
     cmd <- (if null args then withArgs ["--help"] else id) . cmdArgs
-              $ modes [ auth, quota , Main.search, Main.download , Main.upload ]
+              $ modes [ auth, quota , find
+                      , Main.search, Main.download , Main.upload ]
                   &= program "pcs-cli"
 
     config <- readAppConfig
@@ -87,6 +93,7 @@ instance HandleCommand Args where
   run Quota c = runPcsT c Api.quotaInfo >>= print
 
   -- | 搜索文件
+  run (SimpleSearch k) c = run (Search "/" k True) c
   run Search{..} c = runPcsT c (Api.search basePath keyword recursive)
                  >>= printSearchResult
     where

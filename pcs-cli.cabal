@@ -62,7 +62,7 @@ executable pcs-cli
   -- default-extensions:
 
   -- Other library packages from which modules are imported.
-  build-depends:       base
+  build-depends:       base < 5
                     ,  directory
                     ,  filepath
                     ,  http-types
