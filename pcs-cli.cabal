@@ -67,7 +67,6 @@ executable pcs-cli
                     ,  filepath
                     ,  http-types
                     ,  http-client
-                    ,  http-client-multipart
                     ,  mtl
                     ,  transformers
                     ,  monad-control

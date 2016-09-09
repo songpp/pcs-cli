@@ -42,7 +42,7 @@ type Params = Map String String
 uploadFile :: Manager -> String -> Params -> String -> IO (Response L.ByteString)
 uploadFile mgr url params f = withSocketsDo $ do
     --printf "uploading file %s" f
-    req <- parseUrl url
+    req <- parseRequest url
     let req' = req {checkStatus = \_ _ _ -> Nothing,
                     method = methodPost, responseTimeout = Just $ truncate 120e6 }
     request <- formDataBody body req'
@@ -85,11 +85,11 @@ doRequest mgr url param m = withSocketsDo $ do
     req <- case m of
         GET -> do
             let url' = appendParamToUrl
-            req <- parseUrl url'
+            req <- parseRequest url'
             let req' = req { checkStatus = check, method = methodGet }
             return req'
         POST -> do
-            req <- parseUrl url
+            req <- parseRequest url
             let req' = req { checkStatus = check, method = methodPost }
             return $ if Map.null param
                 then req'
