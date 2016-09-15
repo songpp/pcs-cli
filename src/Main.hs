@@ -50,7 +50,7 @@ quota = Quota &= name "quota" &= help "查询空间使用情况"
 search = Search { basePath  = def &= opt ("/" :: String)
                                   &= typ "PATH"
                                   &= help "在这个路径下搜索，默认 / (APP的根目录)",
-                  keyword   = def &= typ "keyword" &= argPos 0,
+                  keyword   = def &= typ "keyword" &= help "搜索关键字",
                   recursive = def &= help "是否递归搜索子文件夹"
               } &= name "search"  &= help "搜索文件"
 

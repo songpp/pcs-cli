@@ -17,14 +17,10 @@ CommandLine Baidu PCS
 Build & Install
 -----
 
-安装Haskell Platform 使用Cabal构建
+安装Haskell Stack 使用Stack构建
 
-	cabal sandbox init
-	cabal install --only-dependencies
-	cabal configure
-	cabal build
-	cabal install --prefix=$HOME/.cabal
-	
+	stack install
+
 
 
 使用
@@ -50,7 +46,7 @@ Build & Install
 			"scope":"basic super_msg netdisk"
 		}
 
-4. 使用`pcs-cli --help`查看都支持哪些命令， 也可以取得子命令的帮助：`pcs-cli search --help`
+4. 使用`pcs-cli --help`查看都支持哪些命令， 也可以取得子命令的帮助：`pcs-cli upload --help`
 
 
 * 上传多个文件
@@ -60,7 +56,7 @@ Build & Install
 
 * 搜索
 		
-		pcs-cli search -r -k pdf
+		pcs-cli find pdf
 
 DEBUG
 ----
